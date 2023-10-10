@@ -1,0 +1,795 @@
+    <!DOCTYPE HTML>
+    <html>
+    <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta http-equiv="Content-Security-Policy" content="default-src * data:; style-src * 'unsafe-inline'; script-src * 'unsafe-inline' 'unsafe-eval'">
+    <script src="components/loader.js"></script>
+    <script src="lib/onsenui/js/onsenui.min.js"></script>
+
+    <link rel="stylesheet" href="components/loader.css">
+    <link rel="stylesheet" href="lib/onsenui/css/onsenui.css">
+    <link rel="stylesheet" href="lib/onsenui/css/onsen-css-components.css">
+    <link rel="stylesheet" href="css/style.css">
+
+    <script>
+        ons.ready(function() {
+        });
+    </script>
+    
+    </head>
+    <body>
+    <div id="map"></div>
+    
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDmxahrWSMJt39XTTheugtBR9Ib6E_bAoY&callback=initMap"></script>
+    <script>
+        var map;
+        var directionsService;
+        var directionsRenderer;
+        var userLocationMarker;
+        var eastLatLng, westLatLng, northLatLng, southLatLng; // グローバル変数として宣言
+         let uphillDiffblue = 0; // 坂道の高低差
+        let downhillDiffblue = 0; // 下り道の高低差
+
+
+        // 現在地から東西南北に0.015度ずれた位置情報を計算する関数
+        function getOffsetLatLng(latlng, latOffset, lngOffset) {
+        var lat = latlng.lat() + latOffset;
+        var lng = latlng.lng() + lngOffset;
+        return new google.maps.LatLng(lat, lng);
+        }
+
+        function initMap() {
+        var latlng = new google.maps.LatLng(35.1830169, 137.1121831);
+        map = new google.maps.Map(document.getElementById("map"), {
+            center: latlng,
+            zoom: 14
+        });
+
+        if (!navigator.geolocation) {
+            alert('Geolocation APIに対応していません');
+            return false;
+        }
+
+        // 現在地の取得
+        navigator.geolocation.getCurrentPosition(function(position) {
+            var now = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
+
+            map.setCenter(now);
+
+            if (userLocationMarker) {
+            userLocationMarker.setPosition(now);
+            } else {
+            userLocationMarker = new google.maps.Marker({
+                position: now,
+                map: map
+            });
+            }
+
+            directionsService = new google.maps.DirectionsService();
+            directionsRenderer = new google.maps.DirectionsRenderer();
+            secondDirectionsRenderer = new google.maps.DirectionsRenderer({
+            suppressMarkers: true,
+            preserveViewport: true,
+            polylineOptions: {
+                strokeColor: "green"
+            }
+            });
+                    thirdDirectionsRenderer = new google.maps.DirectionsRenderer({ // 追加のDirectionsRendererを作成
+            suppressMarkers: true,
+            preserveViewport: true,
+            polylineOptions: {
+                strokeColor: "purple"
+            }
+            });
+            fourthDirectionsRenderer = new google.maps.DirectionsRenderer({ // 追加のDirectionsRendererを作成
+            suppressMarkers: true,
+            preserveViewport: true,
+            polylineOptions: {
+                strokeColor: "red"
+            }
+            });
+            fifthDirectionsRenderer = new google.maps.DirectionsRenderer({ // 追加のDirectionsRendererを作成
+            suppressMarkers: true,
+            preserveViewport: true,
+            polylineOptions: {
+                strokeColor: "black"
+            }
+            });
+        }, function() {
+            alert('位置情報取得に失敗しました');
+        });
+        }
+
+        const showMessage = () => {
+        document.getElementById("directionsPanelgreen").style.display = "none";
+        document.getElementById("directionsPanelred").style.display = "none";
+        document.getElementById("directionsPanelblue").style.display = "none";
+        document.getElementById("directionsPanelyellow").style.display = "none";
+        document.getElementById("directionsPanelpurple").style.display = "none";
+        document.getElementById("output-message").style.display = "block";
+        const s = document.getElementById("s").value;
+        const g = document.getElementById("g").value;
+
+        const formContainer = document.querySelector('.form-container');
+      const outputMessage = document.getElementById('output-message');
+      const startInput = document.getElementById('s');
+      const goalInput = document.getElementById('g');
+
+      formContainer.classList.add('hidden'); // フォームを非表示にする
+      outputMessage.textContent = `出発地点: ${startInput.value}、目的地点: ${goalInput.value}`; // 入力された値を表示する
+
+        // テキストボックスの値を使って、出力するメッセージを生成する
+        const output = "「" + s +  "」から「" + g +  "」のルート<br>";
+        // 出力用のp要素にメッセージを表示
+        document.getElementById("output-message").innerHTML = output;
+
+        // 場所の緯度と経度を取得
+        var geocoderG = new google.maps.Geocoder();
+        geocoderG.geocode({ address: g }, function(resultsG, statusG) {
+            if (statusG === "OK") {
+            if (resultsG[0]) {
+                var locationG = resultsG[0].geometry.location;
+                var latG = locationG.lat();
+                var lngG = locationG.lng();
+                var goal = new google.maps.LatLng(latG, lngG);
+
+                // 現在地から東西南北に0.015度ずれた位置情報を計算
+            eastLatLng = getOffsetLatLng(goal, 0, 0.00333);
+            westLatLng = getOffsetLatLng(goal, 0, -0.00333);
+            northLatLng = getOffsetLatLng(goal, 0.00333, 0);
+            southLatLng = getOffsetLatLng(goal, -0.003, 0);
+
+            
+
+                if (s === "") {
+                // 出発地点が未入力の場合、現在地から目的地までのルートを表示
+                var now = userLocationMarker.getPosition(); // Use the user's current location as the start point
+                var goal = new google.maps.LatLng(latG, lngG);
+                calculateAndDisplayRoute(now, goal);
+                } else {
+                var geocoderS = new google.maps.Geocoder();
+                geocoderS.geocode({ address: s }, function(resultsS, statusS) {
+                    if (statusS === "OK") {
+                    if (resultsS[0]) {
+                        var locationS = resultsS[0].geometry.location;
+                        var latS = locationS.lat();
+                        var lngS = locationS.lng();
+
+                        var start = new google.maps.LatLng(latS, lngS);
+                        var goal = new google.maps.LatLng(latG, lngG);
+
+                        // ルート検索
+                        calculateAndDisplayRoute(start, goal);
+                    } else {
+                        alert("出発地点が見つかりませんでした");
+                    }
+                    } else {
+                    alert("場所の取得に失敗しました");
+                    }
+                });
+                }
+            } else {
+                alert("目的地が見つかりませんでした");
+            }
+            } else {
+            alert("場所の取得に失敗しました");
+            }
+        });
+        }
+        // 以下に、calculateAndDisplayElevation() 関数を追加
+        function calculateAndDisplayElevationpurple(result, routeName,km) {
+        var route = result.routes[0];
+        var path = route.overview_path; // ルートの座標ポイントの配列
+
+        var pathCoordinates = [];
+        for (var i = 0; i < path.length; i++) {
+            pathCoordinates.push({
+            lat: path[i].lat(),
+            lng: path[i].lng()
+            });
+        }
+
+        var elevator = new google.maps.ElevationService();
+        elevator.getElevationAlongPath({
+            path: pathCoordinates,
+            samples: 256
+        }, function(results, status) {
+            if (status === "OK") {
+            var elevations = results;
+
+            // 坂道と下り道の高低差の計算
+var maxUphillDiffpurple = 0;    // 坂道の最大高低差
+var maxDownhillDiffpurple = 0;  // 下り道の最大高低差
+var currentUphillDiffpurple = 0;    // 現在の坂道の高低差
+var currentDownhillDiffpurple = 0;  // 現在の下り道の高低差
+for (var j = 1; j < elevations.length; j++) {
+    var diff = elevations[j].elevation - elevations[j - 1].elevation;
+
+    if (diff > 0) {
+        currentUphillDiffpurple += diff;
+        currentDownhillDiffpurple = 0;  // 下り道の高低差をリセット
+    } else {
+        currentDownhillDiffpurple -= diff;
+        currentUphillDiffpurple = 0;    // 坂道の高低差をリセット
+    }
+
+    maxUphillDiffpurple = Math.max(maxUphillDiffpurple, currentUphillDiffpurple);
+    maxDownhillDiffpurple = Math.max(maxDownhillDiffpurple, currentDownhillDiffpurple);
+}
+
+// 坂道と下り道の高低差の計算
+            var uphillDiffpurple = 0; // 坂道の高低差
+            var downhillDiffpurple = 0; // 下り道の高低差
+            for (var j = 1; j < elevations.length; j++) {
+                var diff = elevations[j].elevation - elevations[j - 1].elevation;
+                if (diff > 0) {
+                uphillDiffpurple += diff;
+                } else {
+                downhillDiffpurple -= diff;
+                }
+            }
+
+            var aaa = uphillDiffpurple - downhillDiffpurple;
+
+var table = '<table><tr><th>' + '<a href="#" onclick="hideOutputMessagepurple()">' + '紫のルート</th></tr>';
+table += '<tr><td>距離:</td><td>' + km.toFixed(2) + ' キロメートル</td></tr>';
+table += '<tr><td>高低差:</td><td>' + aaa.toFixed(2) + ' メートル</td></tr>';
+table += '<tr><td>急な坂道:</td><td>' + maxUphillDiffpurple.toFixed(2) + ' メートル</td></tr>';
+table += '</table>';
+
+// テーブルをoutput-message要素に表示
+document.getElementById("output-message").innerHTML += table;
+
+  }else {
+            alert("Elevation APIリクエストに失敗しました");
+            }
+        });
+        }
+         // 以下に、calculateAndDisplayElevation() 関数を追加
+        function calculateAndDisplayElevationred(result, routeName,km) {
+        var route = result.routes[0];
+        var path = route.overview_path; // ルートの座標ポイントの配列
+
+        var pathCoordinates = [];
+        for (var i = 0; i < path.length; i++) {
+            pathCoordinates.push({
+            lat: path[i].lat(),
+            lng: path[i].lng()
+            });
+        }
+
+        var elevator = new google.maps.ElevationService();
+        elevator.getElevationAlongPath({
+            path: pathCoordinates,
+            samples: 256
+        }, function(results, status) {
+            if (status === "OK") {
+            var elevations = results;
+// 坂道と下り道の高低差の計算
+var maxUphillDiffred = 0;    // 坂道の最大高低差
+var maxDownhillDiffred = 0;  // 下り道の最大高低差
+var currentUphillDiffred = 0;    // 現在の坂道の高低差
+var currentDownhillDiffred = 0;  // 現在の下り道の高低差
+for (var j = 1; j < elevations.length; j++) {
+    var diff = elevations[j].elevation - elevations[j - 1].elevation;
+
+    if (diff > 0) {
+        currentUphillDiffred += diff;
+        currentDownhillDiffred = 0;  // 下り道の高低差をリセット
+    } else {
+        currentDownhillDiffred -= diff;
+        currentUphillDiffred = 0;    // 坂道の高低差をリセット
+    }
+
+    maxUphillDiffred = Math.max(maxUphillDiffred, currentUphillDiffred);
+    maxDownhillDiffred = Math.max(maxDownhillDiffred, currentDownhillDiffred);
+}
+
+            // 坂道と下り道の高低差の計算
+            var uphillDiffred = 0; // 坂道の高低差
+            var downhillDiffred = 0; // 下り道の高低差
+            for (var j = 1; j < elevations.length; j++) {
+                var diff = elevations[j].elevation - elevations[j - 1].elevation;
+                if (diff > 0) {
+                uphillDiffred += diff;
+                } else {
+                downhillDiffred -= diff;
+                }
+            }
+            var aaa = uphillDiffred - downhillDiffred;
+            var table = '<table><tr><th>' + '<a href="#" onclick="hideOutputMessagered()">'+ '赤のルート</th></tr>';
+            table += '<tr><td>距離:</td><td>' + km.toFixed(2) + ' キロメートル</td></tr>';
+        table += '<tr><td>高低差:</td><td>' + aaa.toFixed(2) + ' メートル</td></tr>';
+        table += '<tr><td>急な坂道:</td><td>' + maxUphillDiffred.toFixed(2) + ' メートル</td></tr>';
+table += '</table>';
+        // テーブルをoutput-message要素に表示
+        document.getElementById("output-message").innerHTML += table;
+  }else {
+            alert("Elevation APIリクエストに失敗しました");
+            }
+        });
+        }
+        // 以下に、calculateAndDisplayElevation() 関数を追加
+        function calculateAndDisplayElevationyellow(result, routeName,km) {
+        var route = result.routes[0];
+        var path = route.overview_path; // ルートの座標ポイントの配列
+
+        var pathCoordinates = [];
+        for (var i = 0; i < path.length; i++) {
+            pathCoordinates.push({
+            lat: path[i].lat(),
+            lng: path[i].lng()
+            });
+        }
+
+        var elevator = new google.maps.ElevationService();
+        elevator.getElevationAlongPath({
+            path: pathCoordinates,
+            samples: 256
+        }, function(results, status) {
+            if (status === "OK") {
+            var elevations = results;
+
+// 坂道と下り道の高低差の計算
+var maxUphillDiffyellow = 0;    // 坂道の最大高低差
+var maxDownhillDiffyellow = 0;  // 下り道の最大高低差
+var currentUphillDiffyellow = 0;    // 現在の坂道の高低差
+var currentDownhillDiffyellow = 0;  // 現在の下り道の高低差
+for (var j = 1; j < elevations.length; j++) {
+    var diff = elevations[j].elevation - elevations[j - 1].elevation;
+
+    if (diff > 0) {
+        currentUphillDiffyellow += diff;
+        currentDownhillDiffyellow = 0;  // 下り道の高低差をリセット
+    } else {
+        currentDownhillDiffyellow -= diff;
+        currentUphillDiffyellow = 0;    // 坂道の高低差をリセット
+    }
+
+    maxUphillDiffyellow = Math.max(maxUphillDiffyellow, currentUphillDiffyellow);
+    maxDownhillDiffyellow = Math.max(maxDownhillDiffyellow, currentDownhillDiffyellow);
+}
+            // 坂道と下り道の高低差の計算
+            var uphillDiffyellow = 0; // 坂道の高低差
+            var downhillDiffyellow = 0; // 下り道の高低差
+            for (var j = 1; j < elevations.length; j++) {
+                var diff = elevations[j].elevation - elevations[j - 1].elevation;
+                if (diff > 0) {
+                uphillDiffyellow += diff;
+                } else {
+                downhillDiffyellow -= diff;
+                }
+            }
+            var aaa = uphillDiffyellow - downhillDiffyellow;
+            var table = '<table><tr><th>' + '<a href="#" onclick="hideOutputMessageyellow()">'+ '黄のルート</th></tr>';
+            table += '<tr><td>距離:</td><td>' + km.toFixed(2) + ' キロメートル</td></tr>';
+        table += '<tr><td>高低差:</td><td>' + aaa.toFixed(2) + ' メートル</td></tr>';
+        table += '<tr><td>急な坂道:</td><td>' + maxUphillDiffyellow.toFixed(2) + ' メートル</td></tr>';
+table += '</table>';
+        // テーブルをoutput-message要素に表示
+        document.getElementById("output-message").innerHTML += table;
+            
+  }else {
+            alert("Elevation APIリクエストに失敗しました");
+            }
+        });
+        }
+        // 以下に、calculateAndDisplayElevation() 関数を追加
+        function calculateAndDisplayElevationgreen(result, routeName,km) {
+        var route = result.routes[0];
+        var path = route.overview_path; // ルートの座標ポイントの配列
+
+        var pathCoordinates = [];
+        for (var i = 0; i < path.length; i++) {
+            pathCoordinates.push({
+            lat: path[i].lat(),
+            lng: path[i].lng()
+            });
+        }
+
+        var elevator = new google.maps.ElevationService();
+        elevator.getElevationAlongPath({
+            path: pathCoordinates,
+            samples: 256
+        }, function(results, status) {
+            if (status === "OK") {
+            var elevations = results;
+
+// 坂道と下り道の高低差の計算
+var maxUphillDiffgreen = 0;    // 坂道の最大高低差
+var maxDownhillDiffgreen = 0;  // 下り道の最大高低差
+var currentUphillDiffgreen = 0;    // 現在の坂道の高低差
+var currentDownhillDiffgreen = 0;  // 現在の下り道の高低差
+for (var j = 1; j < elevations.length; j++) {
+    var diff = elevations[j].elevation - elevations[j - 1].elevation;
+
+    if (diff > 0) {
+        currentUphillDiffgreen += diff;
+        currentDownhillDiffgreen = 0;  // 下り道の高低差をリセット
+    } else {
+        currentDownhillDiffgreen -= diff;
+        currentUphillDiffgreen = 0;    // 坂道の高低差をリセット
+    }
+
+    maxUphillDiffgreen = Math.max(maxUphillDiffgreen, currentUphillDiffgreen);
+    maxDownhillDiffgreen = Math.max(maxDownhillDiffgreen, currentDownhillDiffgreen);
+}
+
+            // 坂道と下り道の高低差の計算
+            var uphillDiffgreen = 0; // 坂道の高低差
+            var downhillDiffgreen = 0; // 下り道の高低差
+            for (var j = 1; j < elevations.length; j++) {
+                var diff = elevations[j].elevation - elevations[j - 1].elevation;
+                if (diff > 0) {
+                uphillDiffgreen += diff;
+                } else {
+                downhillDiffgreen -= diff;
+                }
+            }
+            var aaa = uphillDiffgreen - downhillDiffgreen;
+            var table = '<table><tr><th><a >' + '<a href="#" onclick="hideOutputMessagegreen()">' +'緑のルート</a></th></tr>';
+            table += '<tr><td>距離:</td><td>' + km.toFixed(2) + ' キロメートル</td></tr>';
+        table += '<tr><td>高低差:</td><td>' + aaa.toFixed(2) + ' メートル</td></tr>';
+         table += '<tr><td>急な坂道:</td><td>' + maxUphillDiffgreen.toFixed(2) + ' メートル</td></tr>';
+table += '</table>';
+        // テーブルをoutput-message要素に表示
+        document.getElementById("output-message").innerHTML += table;
+  }else {
+            alert("Elevation APIリクエストに失敗しました");
+            }
+        });
+        }
+        
+
+        function calculateAndDisplayRoute(start, goal) {
+    var yakusa = new google.maps.LatLng(35.2247242, 136.8831413);
+    var westLatLng = getOffsetLatLng(start, 0, -0.003); // ここでwestLatLngを計算
+
+    var request = {
+        origin: start,
+        destination: goal,
+        travelMode: google.maps.DirectionsTravelMode.WALKING
+    };
+
+    // ルート検索
+    directionsService.route(request, function(result, status) {
+        if (status == google.maps.DirectionsStatus.OK) {
+            var route = result.routes[0];
+        var totalDistance = 0;
+
+        for (var i = 0; i < route.legs.length; i++) {
+            totalDistance += route.legs[i].distance.value;
+        }
+
+        // totalDistanceにはルートの総距離がメートル単位で格納されています
+
+        // 例：キロメートル単位に変換して表示する場合
+        var totalDistanceKm = totalDistance / 1000;
+
+        directionsRenderer.setDirections(result);
+        directionsRenderer.setMap(map);
+
+// 指示を表示するためのdiv要素を取得
+        var directionsPanelblue = document.getElementById("directionsPanelblue");
+        directionsPanelblue.innerHTML = ""; // 指示をリセット
+
+        // ルート情報からステップごとの指示を取得して表示
+        var route = result.routes[0];
+        for (var i = 0; i < route.legs.length; i++) {
+            var steps = route.legs[i].steps;
+            for (var j = 0; j < steps.length; j++) {
+                var instruction = steps[j].instructions;
+                var stepNumber = j + 1;
+                var stepHtml = "<div><span class='step-number'>ステップ " + stepNumber + ":</span> " + instruction + "</div>";
+                directionsPanelblue.innerHTML += stepHtml;
+            }
+        }
+        var route = result.routes[0];
+        var path = route.overview_path; // ルートの座標ポイントの配列
+
+        var pathCoordinates = [];
+        for (var i = 0; i < path.length; i++) {
+            pathCoordinates.push({
+            lat: path[i].lat(),
+            lng: path[i].lng()
+            });
+        }
+
+        // Elevation APIリクエストの作成
+        var elevator = new google.maps.ElevationService();
+        elevator.getElevationAlongPath({
+            path: pathCoordinates,
+            samples: 256 // サンプル数
+        }, function(results, status) {
+            if (status === "OK") {
+            var elevations = results;
+
+// 坂道と下り道の高低差の計算
+var maxUphillDiff = 0;    // 坂道の最大高低差
+var maxDownhillDiff = 0;  // 下り道の最大高低差
+var currentUphillDiff = 0;    // 現在の坂道の高低差
+var currentDownhillDiff = 0;  // 現在の下り道の高低差
+for (var j = 1; j < elevations.length; j++) {
+    var diff = elevations[j].elevation - elevations[j - 1].elevation;
+
+    if (diff > 0) {
+        currentUphillDiff += diff;
+        currentDownhillDiff = 0;  // 下り道の高低差をリセット
+    } else {
+        currentDownhillDiff -= diff;
+        currentUphillDiff = 0;    // 坂道の高低差をリセット
+    }
+
+    maxUphillDiff = Math.max(maxUphillDiff, currentUphillDiff);
+    maxDownhillDiff = Math.max(maxDownhillDiff, currentDownhillDiff);
+}
+            // 坂道と下り道の高低差の計算
+            var uphillDiff = 0; // 坂道の高低差
+            var downhillDiff = 0; // 下り道の高低差
+            for (var j = 1; j < elevations.length; j++) {
+                var diff = elevations[j].elevation - elevations[j - 1].elevation;
+                if (diff > 0) {
+                uphillDiff += diff;
+                } else {
+                downhillDiff -= diff;
+                }
+            }
+            var aaa = uphillDiff - downhillDiff;
+
+                    var table = '<table><tr><th>' + '<a href="#" onclick="hideOutputMessageblue()">' + '青のルート</a></th></tr>';
+                    table += '<tr><td>距離:</td><td>' + totalDistanceKm.toFixed(2) + ' キロメートル</td></tr>';
+        table += '<tr><td>高低差:</td><td>' + aaa.toFixed(2) + ' メートル</td></tr>';
+        table += '<tr><td>急な坂道:</td><td>' + maxUphillDiff.toFixed(2) + ' メートル</td></tr>';
+table += '</table>';
+        // テーブルをoutput-message要素に表示
+        document.getElementById("output-message").innerHTML += table;
+            } else {
+            alert("Elevation APIリクエストに失敗しました");
+            }
+        });
+        } else {
+        alert("ルート検索に失敗しました");
+        }
+    });
+
+    // Second Route
+        var secondRequest = {
+            origin: start,
+            destination: goal,
+            waypoints: [{ location: westLatLng }],
+            travelMode: google.maps.DirectionsTravelMode.WALKING
+        };
+
+        directionsService.route(secondRequest, function(result, status) {
+    if (status == google.maps.DirectionsStatus.OK) {
+        var route = result.routes[0];
+        var totalDistance = 0;
+
+        for (var i = 0; i < route.legs.length; i++) {
+            totalDistance += route.legs[i].distance.value;
+        }
+
+        // totalDistanceにはルートの総距離がメートル単位で格納されています
+
+        // 例：キロメートル単位に変換して表示する場合
+        var totalDistanceKmgreen = totalDistance / 1000;
+        // 2番目のルートを地図上に表示する
+        secondDirectionsRenderer.setDirections(result);
+        secondDirectionsRenderer.setMap(map);
+
+        // 標高情報を計算して表示する（緑色のルート用）
+        calculateAndDisplayElevationgreen(result, 'green',totalDistanceKmgreen);
+    } else {
+        alert("経由地点から目的地までのルート検索に失敗しました");
+    }
+
+        // 指示を表示するためのdiv要素を取得
+        var directionsPanelgreen = document.getElementById("directionsPanelgreen");
+        directionsPanelgreen.innerHTML = ""; // 指示をリセット
+
+        // ルート情報からステップごとの指示を取得して表示
+        var route = result.routes[0];
+        for (var i = 0; i < route.legs.length; i++) {
+            var steps = route.legs[i].steps;
+            for (var j = 0; j < steps.length; j++) {
+                var instruction = steps[j].instructions;
+                var stepNumber = j + 1;
+                var stepHtml = "<div><span class='step-number'>ステップ " + stepNumber + ":</span> " + instruction + "</div>";
+                directionsPanelgreen.innerHTML += stepHtml;
+            }
+        }
+    
+});
+
+
+        // Third Route
+        var thirdRequest = {
+          origin: start,
+            destination: goal,
+            waypoints: [{ location: northLatLng }],
+            travelMode: google.maps.DirectionsTravelMode.WALKING
+        };
+
+        directionsService.route(thirdRequest, function(result, status) {
+           if (status == google.maps.DirectionsStatus.OK) {
+               var route = result.routes[0];
+        var totalDistance = 0;
+
+        for (var i = 0; i < route.legs.length; i++) {
+            totalDistance += route.legs[i].distance.value;
+        }
+
+        // totalDistanceにはルートの総距離がメートル単位で格納されています
+
+        // 例：キロメートル単位に変換して表示する場合
+        var totalDistanceKmpurple = totalDistance / 1000;
+             //Display the third route on the map using the third DirectionsRenderer
+            thirdDirectionsRenderer.setDirections(result);
+            thirdDirectionsRenderer.setMap(map);
+
+             //Calculate and display elevation information
+            calculateAndDisplayElevationpurple(result, 'purple',totalDistanceKmpurple);
+            } else {
+            alert("経由地点から目的地までのルート検索に失敗しました");
+            }
+            // 指示を表示するためのdiv要素を取得
+        var directionsPanelpurple = document.getElementById("directionsPanelpurple");
+        directionsPanelpurple.innerHTML = ""; // 指示をリセット
+
+        // ルート情報からステップごとの指示を取得して表示
+        var route = result.routes[0];
+        for (var i = 0; i < route.legs.length; i++) {
+            var steps = route.legs[i].steps;
+            for (var j = 0; j < steps.length; j++) {
+                var instruction = steps[j].instructions;
+                var stepNumber = j + 1;
+               var stepHtml = "<div><span class='step-number'>ステップ " + stepNumber + ":</span> " + instruction + "</div>";
+                directionsPanelpurple.innerHTML += stepHtml;
+            }
+        }
+        });
+
+        // Fourth Route
+        var fourthRequest = {
+              origin: start,
+            destination: goal,
+            waypoints: [{ location: eastLatLng }],
+           travelMode: google.maps.DirectionsTravelMode.WALKING
+        };
+
+        directionsService.route(fourthRequest, function(result, status) {
+            if (status == google.maps.DirectionsStatus.OK) {
+                var route = result.routes[0];
+        var totalDistance = 0;
+
+        for (var i = 0; i < route.legs.length; i++) {
+            totalDistance += route.legs[i].distance.value;
+        }
+
+        // totalDistanceにはルートの総距離がメートル単位で格納されています
+
+        // 例：キロメートル単位に変換して表示する場合
+        var totalDistanceKmred = totalDistance / 1000;
+            // Display the fourth route on the map using the fourth DirectionsRenderer
+            fourthDirectionsRenderer.setDirections(result);
+            fourthDirectionsRenderer.setMap(map);
+
+            // Calculate and display elevation information
+            calculateAndDisplayElevationred(result, 'red',totalDistanceKmred);
+            } else {
+            alert("経由地点から目的地までのルート検索に失敗しました");
+            }
+            // 指示を表示するためのdiv要素を取得
+        var directionsPanelred = document.getElementById("directionsPanelred");
+        directionsPanelred.innerHTML = ""; // 指示をリセット
+
+        // ルート情報からステップごとの指示を取得して表示
+        var route = result.routes[0];
+        for (var i = 0; i < route.legs.length; i++) {
+            var steps = route.legs[i].steps;
+            for (var j = 0; j < steps.length; j++) {
+                var instruction = steps[j].instructions;
+                var stepNumber = j + 1;
+                var stepHtml = "<div><span class='step-number'>ステップ " + stepNumber + ":</span> " + instruction + "</div>";
+                directionsPanelred.innerHTML += stepHtml;
+            }
+        }
+        });
+
+        // Fifth Route
+        var fifthRequest = {
+            origin: start,
+            destination: goal,
+            waypoints: [{ location: southLatLng }],
+            travelMode: google.maps.DirectionsTravelMode.WALKING
+        };
+
+        directionsService.route(fifthRequest, function(result, status) {
+            if (status == google.maps.DirectionsStatus.OK) {
+                var route = result.routes[0];
+        var totalDistance = 0;
+
+        for (var i = 0; i < route.legs.length; i++) {
+            totalDistance += route.legs[i].distance.value;
+        }
+
+        // totalDistanceにはルートの総距離がメートル単位で格納されています
+
+        // 例：キロメートル単位に変換して表示する場合
+        var totalDistanceKmyellow = totalDistance / 1000;
+            // Display the fifth route on the map using the fifth DirectionsRenderer
+            fifthDirectionsRenderer.setDirections(result);
+            fifthDirectionsRenderer.setMap(map);
+
+            // Calculate and display elevation information
+            calculateAndDisplayElevationyellow(result, 'yellow',totalDistanceKmyellow);
+            } else {
+            alert("経由地点から目的地までのルート検索に失敗しました");
+            }
+             // 指示を表示するためのdiv要素を取得
+        var directionsPanelyellow = document.getElementById("directionsPanelyellow");
+        directionsPanelyellow.innerHTML = ""; // 指示をリセット
+
+        // ルート情報からステップごとの指示を取得して表示
+        var route = result.routes[0];
+        for (var i = 0; i < route.legs.length; i++) {
+            var steps = route.legs[i].steps;
+            for (var j = 0; j < steps.length; j++) {
+                var instruction = steps[j].instructions;
+                var stepNumber = j + 1;
+                var stepHtml = "<div><span class='step-number'>ステップ " + stepNumber + ":</span> " + instruction + "</div>";
+                directionsPanelyellow.innerHTML += stepHtml;
+            }
+        }
+        });
+        }
+        function hideOutputMessageblue() {
+    document.getElementById("output-message").style.display = "none";
+document.getElementById("directionsPanelblue").style.display = "block";
+}
+        function hideOutputMessagegreen() {
+    document.getElementById("output-message").style.display = "none";
+document.getElementById("directionsPanelgreen").style.display = "block";
+}
+function hideOutputMessagered() {
+    document.getElementById("output-message").style.display = "none";
+document.getElementById("directionsPanelred").style.display = "block";
+}
+function hideOutputMessagepurple() {
+    document.getElementById("output-message").style.display = "none";
+document.getElementById("directionsPanelpurple").style.display = "block";
+}
+function hideOutputMessageyellow() {
+    document.getElementById("output-message").style.display = "none";
+document.getElementById("directionsPanelyellow").style.display = "block";
+}
+    </script>
+    
+<div class="form-container">
+    <ul>
+        <li>
+            <div>出発地点:</div>
+            <div class="item-input-wrap">
+            <input id="s" type="text" placeholder="start"/>
+            </div>
+        </li>
+        <li>
+            <div>目的地点:</div>
+            <div class="item-input-wrap">
+                <input id="g" type="text" placeholder="goal"/>
+            </div>
+        </li>
+    </ul>
+    <input type="button" onclick="showMessage()" value="送信">
+</div>
+<p id="output-message"></p>
+
+    
+    <div id="directionsPanelblue"></div>
+    <div id="directionsPanelgreen"></div>
+    <div id="directionsPanelred"></div>
+    <div id="directionsPanelpurple"></div>
+    <div id="directionsPanelyellow"></div>
+    </body>
+    </html>

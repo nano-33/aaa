@@ -1,0 +1,43 @@
+    <!DOCTYPE HTML>
+    <html>
+    <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta http-equiv="Content-Security-Policy" content="default-src * data:; style-src * 'unsafe-inline'; script-src * 'unsafe-inline' 'unsafe-eval'">
+    <script src="components/loader.js"></script>
+    <script src="lib/onsenui/js/onsenui.min.js"></script>
+
+    <link rel="stylesheet" href="components/loader.css">
+    <link rel="stylesheet" href="lib/onsenui/css/onsenui.css">
+    <link rel="stylesheet" href="lib/onsenui/css/onsen-css-components.css">
+    <link rel="stylesheet" href="css/style.css">
+
+    <script>
+        ons.ready(function() {
+        });
+    </script>
+    
+    </head>
+    <body>
+    <div id="map"></div>
+    
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDmxahrWSMJt39XTTheugtBR9Ib6E_bAoY&callback=initMap"></script>
+    <script>
+        var map;
+        
+        function initMap() {
+        var latlng = new google.maps.LatLng(35.1830169, 137.1121831);
+        map = new google.maps.Map(document.getElementById("map"), {
+            center: latlng,
+            zoom: 14
+        });
+
+        if (!navigator.geolocation) {
+            alert('Geolocation APIに対応していません');
+            return false;
+        }
+        }
+    
+    </script>
+    </body>
+    </html>
